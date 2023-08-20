@@ -89,8 +89,9 @@ class VeilidNode:
 			raise e
 		except:
 			traceback.print_exc()
-		finally:
+		finally: # dunno if this is necessary
 			writer.close()
+			await writer.wait_closed()
 
 
 	async def _inbound_loop(self, reader: asyncio.StreamReader, source_node: cryptosystem.CryptoPublic):
@@ -145,18 +146,16 @@ class VeilidNode:
 			raise e
 		except:
 			traceback.print_exc()
-		finally:
-			reader.close()
 
 
 
 async def main():
 	secret = cryptos.get_secret_cryptosystem(b"VLD0").generate()
 	bootstrap_info = {
-		#vld0_decode_pubkey('VLD0:m5OY1uhPTq2VWhpYJASmzATsKTC7eZBQmyNs6tRJMmA').public_bytes_raw():
+		#cryptos.parse_public_string('VLD0:m5OY1uhPTq2VWhpYJASmzATsKTC7eZBQmyNs6tRJMmA'):
 		#	(0, 'bootstrap-1.veilid.net', 5150),
 
-		#vld0_decode_pubkey('VLD0:6-FfH7TPb70U-JntwjHS7XqTCMK0lhVqPQ17dJuwlBM').public_bytes_raw():
+		#cryptos.parse_public_string('VLD0:6-FfH7TPb70U-JntwjHS7XqTCMK0lhVqPQ17dJuwlBM'):
 		#	(0, 'bootstrap-2.veilid.net', 5150),
 
 		cryptos.parse_public_string("VLD0:lwNHmsRwyYO6cXqPjwBN_Mhb3zhbrfNIYaDPAAbRjvw"):
