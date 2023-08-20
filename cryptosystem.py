@@ -56,6 +56,14 @@ class CryptoPublic(ABC):
 
 	def __repr__(self) -> str:
 		return f"{self.__class__.__name__}({str(self)})"
+	
+	def __hash__(self) -> int:
+		return (self.CRYPTO_KIND, bytes(self)).__hash__()
+	
+	def __eq__(self, __value: object) -> bool:
+		if not isinstance(__value, CryptoPublic):
+			return False
+		return (self.CRYPTO_KIND, bytes(self)) == (__value.CRYPTO_KIND, bytes(__value))
 
 
 class CryptoSecret(ABC):
