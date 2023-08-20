@@ -5,9 +5,13 @@ from Crypto.Cipher import ChaCha20
 import ed25519_dalek # https://github.com/DavidBuchanan314/py-ed25519-bindings
 from cryptosystem import CryptoPublic, CryptoSecret, CryptoSymmetric, CryptoException
 from typing import Self
-
+from blake3 import blake3
 
 VLD0_KIND = b"VLD0"
+
+VLD0_DOMAIN_SIGN = b"VLD0_SIGN"
+VLD0_DOMAIN_CRYPT = b"VLD0_CRYPT"
+
 
 class VLD0Symmetric(CryptoSymmetric):
 	def __init__(self, key: bytes) -> None:
@@ -43,7 +47,7 @@ class VLD0Public(CryptoPublic):
 		self.pubkey_x = vld0_ed25519_to_x25519_pub(self.pubkey_ed)
 
 	def verify(self, message: bytes, signature: bytes) -> None:
-		if not ed25519_dalek.ed_verify_blake3_ph(signature, message, self.pubkey_ed.public_bytes_raw()):
+		if not ed25519_dalek.ed_verify_sha512_ph_ctx(signature, message, VLD0_DOMAIN_SIGN, self.pubkey_ed.public_bytes_raw()):
 			raise CryptoException("invalid signature")
 	
 	def __bytes__(self) -> bytes:
@@ -68,11 +72,12 @@ class VLD0Secret(CryptoSecret):
 	
 	def sign(self, message: bytes) -> bytes:
 		dalek_priv, dalek_pub = ed25519_dalek.ed_from_seed(self.privkey_ed.private_bytes_raw())
-		return ed25519_dalek.ed_sign_blake3_ph(dalek_pub, dalek_priv, message)
+		return ed25519_dalek.ed_sign_sha512_ph_ctx(dalek_pub, dalek_priv, VLD0_DOMAIN_SIGN, message)
 	
 	def exchange(self, peer_public: VLD0Public) -> CryptoSymmetric:
 		shared_secret = self.privkey_x.exchange(peer_public.pubkey_x)
-		return VLD0Symmetric(shared_secret)  # XXX: no KDF!
+		derived = blake3(VLD0_DOMAIN_CRYPT + shared_secret).digest()
+		return VLD0Symmetric(derived)
 	
 	def __bytes__(self) -> bytes:
 		return self.privkey_ed.private_bytes_raw()
