@@ -3,6 +3,7 @@ import secrets
 import asyncio
 import traceback
 import socket
+from collections import defaultdict
 
 import envelope
 import cryptosystem
@@ -27,10 +28,10 @@ class VeilidNode:
 	rpc_inflight: Dict[int, asyncio.Queue] = {}
 
 	# things we want to send to each node
-	send_queues: Dict[bytes, proto.Operation] = {}
+	send_queues: Dict[cryptosystem.CryptoPublic, asyncio.Queue] = defaultdict(asyncio.Queue)
 
 	# tasks that sit in a loop, reading from a socket
-	tasks: List[asyncio.Task] = []
+	connection_tasks: Dict[cryptosystem.CryptoPublic, List[asyncio.Task]] = defaultdict(list)
 
 	def __init__(self, secret_key: cryptosystem.CryptoSecret, bootstrap_phonebook: Dict[bytes, Tuple[int, str, int]]) -> None:
 		self.secret_key = secret_key
@@ -45,8 +46,8 @@ class VeilidNode:
 
 	async def __aexit__(self, exc_type, exc, tb):
 		# clean up readers
-		for task in self.tasks:
-			task.cancel()
+		for node in self.connection_tasks:
+			await self.hangup(node)
 
 	# may throw exceptions on timeout or other issues...
 	async def rpc_query(self, target_node: cryptosystem.CryptoPublic, query: proto.Question, timeout: int=10) -> proto.Answer:
@@ -57,11 +58,11 @@ class VeilidNode:
 			reader, writer = await asyncio.open_connection(host, port)
 			peerinfo = writer.get_extra_info("peername")
 			print(f"[+] connected to {target_node} at {peerinfo}")
-			self.send_queues[target_node] = asyncio.Queue()
+			#self.send_queues[target_node] = asyncio.Queue()
 
 			# XXX: if one task dies, we kinda want to take the other down with it - does that happen?
-			self.tasks.append(asyncio.create_task(self._inbound_loop(reader, target_node)))
-			self.tasks.append(asyncio.create_task(self._outbound_loop(writer, target_node)))
+			self.connection_tasks[target_node].append(asyncio.create_task(self._inbound_loop(reader, target_node)))
+			self.connection_tasks[target_node].append(asyncio.create_task(self._outbound_loop(writer, target_node)))
 
 		op = proto.Operation.new_message()
 		op.opId = secrets.randbits(64)
@@ -74,6 +75,19 @@ class VeilidNode:
 		result = await asyncio.wait_for(queue.get(), timeout=timeout)
 		del self.rpc_inflight[op.opId]
 		return result
+
+	async def hangup(self, target_node: cryptosystem.CryptoPublic):
+		"""
+		in theory, purge any active connections to a given node
+		I think we might need to await on the cancellation actually completing, though
+		"""
+		for task in self.connection_tasks[target_node]:
+			task.cancel()
+			try:
+				await task
+			except asyncio.CancelledError:
+				pass
+		self.connection_tasks[target_node].clear()
 
 	async def _outbound_loop(self, writer: asyncio.StreamWriter, dest_node: cryptosystem.CryptoPublic):
 		try:
@@ -148,27 +162,30 @@ class VeilidNode:
 			traceback.print_exc()
 
 
-
 async def main():
+	#secret = cryptos.parse_secret_string("VLD0:REDACTED")
 	secret = cryptos.get_secret_cryptosystem(b"VLD0").generate()
 	bootstrap_info = {
-		#cryptos.parse_public_string('VLD0:m5OY1uhPTq2VWhpYJASmzATsKTC7eZBQmyNs6tRJMmA'):
-		#	(0, 'bootstrap-1.veilid.net', 5150),
+		cryptos.parse_public_string('VLD0:m5OY1uhPTq2VWhpYJASmzATsKTC7eZBQmyNs6tRJMmA'):
+			(0, 'bootstrap-1.veilid.net', 5150),
 
-		#cryptos.parse_public_string('VLD0:6-FfH7TPb70U-JntwjHS7XqTCMK0lhVqPQ17dJuwlBM'):
-		#	(0, 'bootstrap-2.veilid.net', 5150),
+		cryptos.parse_public_string('VLD0:6-FfH7TPb70U-JntwjHS7XqTCMK0lhVqPQ17dJuwlBM'):
+			(0, 'bootstrap-2.veilid.net', 5150),
 
 		cryptos.parse_public_string("VLD0:lwNHmsRwyYO6cXqPjwBN_Mhb3zhbrfNIYaDPAAbRjvw"):
 			(0, "skinner", 5150),
 
-		#cryptos.parse_public_string("VLD0:Retr02MzvOpAHAsTwEoWpdVc1W-JjTCSsGWQtL4SR-s"):
-		#	(0, "208.87.102.169", 5150)
+		cryptos.parse_public_string("VLD0:Retr02MzvOpAHAsTwEoWpdVc1W-JjTCSsGWQtL4SR-s"):
+			(0, "208.87.102.169", 5150)
 	}
 	async with VeilidNode(secret, bootstrap_info) as session:
 		query = proto.Question.new_message()
 		query.detail.init("statusQ")
-		response = await session.rpc_query(list(bootstrap_info.keys())[0], query)
+		target_node = list(bootstrap_info.keys())[0]
+		response = await session.rpc_query(target_node, query)
 		print("RPC response:", response)
+		await session.hangup(target_node)
+		print("hung up")
 		while True:
 			await asyncio.sleep(10)
 
