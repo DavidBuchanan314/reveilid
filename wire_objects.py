@@ -53,6 +53,25 @@ class CryptoKey(WireSerDes):
 
 
 @dataclass(frozen=True)
+class TypedKey(WireSerDes):
+	crypto_kind: bytes
+	key: bytes
+
+	@classmethod
+	def from_proto(cls, proto: proto.TypedKey) -> Self:
+		return cls(
+			FourCC.from_proto(proto.kind).fourcc_bytes,
+			CryptoKey.from_proto(proto.key).key_bytes
+		)
+
+	def to_proto(self) -> proto.TypedKey:
+		return proto.TypedKey(
+			kind=FourCC(self.crypto_kind).to_proto(),
+			key=CryptoKey(self.key).to_proto()
+		)
+
+
+@dataclass(frozen=True)
 class CryptoSignature(WireSerDes):
 	signature_bytes: bytes
 
