@@ -5,6 +5,7 @@ from proto import veilid_capnp as proto
 from wire_objects import TypedKey
 import socket
 import traceback
+from util import epoch_micros_to_human
 
 
 async def rpc_findNode(session: VeilidNode, node_to_ask: cryptosystem.CryptoPublic, node_to_find: cryptosystem.CryptoPublic):
@@ -138,7 +139,7 @@ async def main():
 	print(f"found {len(found_nodes)} nodes total")
 	found_tuples = [(str(node), info) for node, info in found_nodes.items()]
 	for node, info in sorted(found_tuples):
-		print(node, "->", info[1], info[2])
+		print(epoch_micros_to_human(info[0]), node, "->", info[1], info[2])
 
 if __name__ == "__main__":
 	asyncio.run(main())
