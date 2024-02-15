@@ -1,0 +1,9 @@
+blake3==0.4.1
+cffi==1.16.0
+ChaCha20==1.1.1
+cryptography==42.0.2
+lz4==4.3.3
+py-ed25519-bindings @ git+https://github.com/DavidBuchanan314/py-ed25519-bindings.git@90cf0c1905f5ac69b3c61ad6152560142f4418df
+pycapnp==1.3.0
+pycparser==2.21
+pycryptodome==3.20.0
